@@ -65,8 +65,7 @@ module Net  #:nodoc: all
         connect_without_webmock
         request_without_webmock(request, nil, &block)
       else
-        message = "Real HTTP connections are disabled. Unregistered request: #{request_signature}"
-        WebMock.assertion_failure(message)
+        raise WebMock::NetConnectNotAllowedError.new(request_signature)
       end
     end
     alias_method :request_without_webmock, :request
@@ -124,9 +123,10 @@ module WebMock
       uri = "#{protocol}://#{userinfo}#{net_http.address}:#{net_http.port}#{path}"
       method = request.method.downcase.to_sym
 
-      headers = Hash[*request.to_hash.map {|k,v| [k, v.flatten]}.flatten]
+      headers = Hash[*request.to_hash.map {|k,v| [k, v]}.inject([]) {|r,x| r + x}]
+       
+      headers.reject! {|k,v| k =~ /[Aa]uthorization/ && v.first =~ /^Basic / } #we added it to url userinfo
 
-      headers.reject! {|k,v| k =~ /[Aa]uthorization/ && v =~ /^Basic / } #we added it to url userinfo
 
       if request.body_stream
         body = request.body_stream.read

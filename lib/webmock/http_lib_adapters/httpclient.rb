@@ -26,8 +26,7 @@ if defined?(HTTPClient)
           do_get_block_without_webmock(req, proxy, conn, &block)
         end
       else
-        message = "Real HTTP connections are disabled. Unregistered request: #{request_signature}"
-        WebMock.assertion_failure(message)
+        raise NetConnectNotAllowedError.new(request_signature)
       end
     end
 
@@ -38,8 +37,7 @@ if defined?(HTTPClient)
       if WebMock.registered_request?(request_signature) || WebMock.net_connect_allowed?(request_signature.uri)
         do_request_async_without_webmock(method, uri, query, body, extheader)
       else
-        message = "Real HTTP connections are disabled. Unregistered request: #{request_signature}"
-        WebMock.assertion_failure(message)
+        raise NetConnectNotAllowedError.new(request_signature)
       end
     end
 
@@ -76,8 +74,12 @@ if defined?(HTTPClient)
 
     auth = www_auth.basic_auth
     auth.challenge(req.header.request_uri, nil)
-
-    headers = Hash[*req.header.all.flatten]
+    
+    headers = req.header.all.inject({}) do |headers, header| 
+      headers[header[0]] ||= [];
+      headers[header[0]] << header[1]
+      headers
+    end
 
     if (auth_cred = auth.get(req)) && auth.scheme == 'Basic'
       userinfo = WebMock::Util::Headers.decode_userinfo_from_header(auth_cred)
